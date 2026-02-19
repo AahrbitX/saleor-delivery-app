@@ -1,48 +1,38 @@
-import { AuthConfig, authExchange } from "@urql/exchange-auth";
 import {
-  cacheExchange,
   createClient as urqlCreateClient,
-  dedupExchange,
+  cacheExchange,
   fetchExchange,
+  makeOperation,
 } from "urql";
 
-interface IAuthState {
-  token: string;
-}
-
-export const createClient = (url: string, getAuth: AuthConfig<IAuthState>["getAuth"]) =>
+export const createClient = (url: string, getAuth: () => string | null) =>
   urqlCreateClient({
     url,
     exchanges: [
-      dedupExchange,
       cacheExchange,
-      authExchange<IAuthState>({
-        addAuthToOperation: ({ authState, operation }) => {
-          if (!authState || !authState?.token) {
-            return operation;
-          }
-
-          const fetchOptions =
-            typeof operation.context.fetchOptions === "function"
-              ? operation.context.fetchOptions()
-              : operation.context.fetchOptions || {};
-
-          return {
-            ...operation,
-            context: {
-              ...operation.context,
-              fetchOptions: {
-                ...fetchOptions,
-                headers: {
-                  ...fetchOptions.headers,
-                  "Authorization-Bearer": authState.token,
+      ({ forward }) =>
+        (ops$) => {
+          const { pipe, map } = require("wonka");
+          return pipe(
+            ops$,
+            map((operation: any) => {
+              const token = getAuth();
+              if (!token) return operation;
+              return makeOperation(operation.kind, operation, {
+                ...operation.context,
+                fetchOptions: {
+                  ...((typeof operation.context.fetchOptions === "function"
+                    ? operation.context.fetchOptions()
+                    : operation.context.fetchOptions) || {}),
+                  headers: {
+                    Authorization: `Bearer ${token}`,
+                  },
                 },
-              },
-            },
-          };
+              });
+            }),
+            forward
+          );
         },
-        getAuth,
-      }),
       fetchExchange,
     ],
   });

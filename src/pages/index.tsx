@@ -1,208 +1,431 @@
-import { actions, useAppBridge } from "@saleor/app-sdk/app-bridge";
-import { Box, Button, Input, Text } from "@saleor/macaw-ui";
-import { NextPage } from "next";
-import Link from "next/link";
-import { MouseEventHandler, useEffect, useState } from "react";
+import { useState } from "react";
 
-const AddToSaleorForm = () => (
-  <Box
-    as={"form"}
-    display={"flex"}
-    alignItems={"center"}
-    gap={4}
-    onSubmit={(event) => {
-      event.preventDefault();
+interface TrackingInfo {
+  status: string;
+  statusTime: string;
+  location: string;
+  awb: string;
+}
 
-      const saleorUrl = new FormData(event.currentTarget as HTMLFormElement).get("saleor-url");
-      const manifestUrl = new URL("/api/manifest", window.location.origin);
-      const redirectUrl = new URL(
-        `/dashboard/apps/install?manifestUrl=${manifestUrl}`,
-        saleorUrl as string
-      ).href;
+interface ServiceabilityData {
+  success: boolean;
+  error: string;
+  data: Array<{
+    center: string;
+    city: string;
+    state: string;
+    pincode: string;
+    fm_serviceable: boolean;
+    payment_type: string;
+  }>;
+}
 
-      window.open(redirectUrl, "_blank");
-    }}
-  >
-    <Input type="url" required label="Saleor URL" name="saleor-url" />
-    <Button type="submit">Add to Saleor</Button>
-  </Box>
-);
+export default function DelhiveryApp() {
+  const [waybill, setWaybill] = useState("");
+  const [tracking, setTracking] = useState<TrackingInfo | null>(null);
+  const [trackError, setTrackError] = useState("");
+  const [pincode, setPincode] = useState("");
+  const [serviceability, setServiceability] = useState<ServiceabilityData | null>(null);
+  const [loadingTrack, setLoadingTrack] = useState(false);
+  const [loadingPin, setLoadingPin] = useState(false);
 
-/**
- * This is page publicly accessible from your app.
- * You should probably remove it.
- */
-const IndexPage: NextPage = () => {
-  const { appBridgeState, appBridge } = useAppBridge();
-  const [mounted, setMounted] = useState(false);
-
-  useEffect(() => {
-    setMounted(true);
-  }, []);
-
-  const handleLinkClick: MouseEventHandler<HTMLAnchorElement> = (e) => {
-    /**
-     * In iframe, link can't be opened in new tab, so Dashboard must be a proxy
-     */
-    if (appBridgeState?.ready) {
-      e.preventDefault();
-
-      appBridge?.dispatch(
-        actions.Redirect({
-          newContext: true,
-          to: e.currentTarget.href,
-        })
-      );
+  async function trackShipment() {
+    if (!waybill.trim()) return;
+    setLoadingTrack(true);
+    setTracking(null);
+    setTrackError("");
+    try {
+      const res = await fetch(`/api/delhivery/track?waybill=${waybill}`);
+      const data = await res.json();
+      if (data.error) setTrackError(data.error);
+      else setTracking(data);
+    } catch {
+      setTrackError("Failed to fetch tracking info.");
+    } finally {
+      setLoadingTrack(false);
     }
+  }
 
-    /**
-     * Otherwise, assume app is accessed outside of Dashboard, so href attribute on <a> will work
-     */
+  async function checkServiceability() {
+    if (!pincode.trim()) return;
+    setLoadingPin(true);
+    setServiceability(null);
+    try {
+      const res = await fetch(`/api/delhivery/serviceability?pin=${pincode}`);
+      const data = await res.json();
+      setServiceability(data);
+    } catch {
+      setServiceability(null);
+    } finally {
+      setLoadingPin(false);
+    }
+  }
+
+  const parsePaymentTypes = (payment_type: string): string[] => {
+    try { return JSON.parse(payment_type); } catch { return []; }
   };
 
-  const isLocalHost = global.location.href.includes("localhost");
-
   return (
-    <Box padding={8}>
-      <Text size={11}>Welcome to Saleor App Template (Next.js) 🚀</Text>
-      <Text as={"p"} marginY={4}>
-        Saleor App Template is a minimalistic boilerplate that provides a working example of a
-        Saleor app.
-      </Text>
-      {appBridgeState?.ready && mounted && (
-        <Link href="/actions">
-          <Button variant="secondary">See what your app can do →</Button>
-        </Link>
-      )}
+    <>
+      <style>{`
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
-      <Text as={"p"} marginTop={8}>
-        Explore the App Template by visiting:
-      </Text>
-      <ul>
-        <li>
-          <code>/src/pages/api/manifest</code> - the{" "}
-          <a
-            href="https://docs.saleor.io/docs/3.x/developer/extending/apps/manifest"
-            target="_blank"
-            rel="noreferrer"
-          >
-            App Manifest
-          </a>
-          .
-        </li>
-        <li>
-          <code>/src/pages/api/webhooks/order-created</code> - an example <code>ORDER_CREATED</code>{" "}
-          webhook handler.
-        </li>
-        <li>
-          <code>/graphql</code> - the pre-defined GraphQL queries.
-        </li>
-        <li>
-          <code>/generated/graphql.ts</code> - the code generated for those queries by{" "}
-          <a target="_blank" rel="noreferrer" href="https://the-guild.dev/graphql/codegen">
-            GraphQL Code Generator
-          </a>
-          .
-        </li>
-      </ul>
-      <Text size={8} marginTop={8} as={"h2"}>
-        Resources
-      </Text>
-      <ul>
-        <li>
-          <a
-            onClick={handleLinkClick}
-            target="_blank"
-            href="https://docs.saleor.io/docs/3.x/developer/extending/apps/key-concepts"
-            rel="noreferrer"
-          >
-            <Text color={"info1"}>Apps documentation </Text>
-          </a>
-        </li>
-        <li>
-          <a
-            onClick={handleLinkClick}
-            target="_blank"
-            rel="noreferrer"
-            href="https://docs.saleor.io/docs/3.x/developer/extending/apps/developing-with-tunnels"
-          >
-            <Text color={"info1"}>Tunneling the app</Text>
-          </a>
-        </li>
-        <li>
-          <a
-            onClick={handleLinkClick}
-            target="_blank"
-            rel="noreferrer"
-            href="https://github.com/saleor/app-examples"
-          >
-            <Text color={"info1"}>App Examples repository</Text>
-          </a>
-        </li>
+        body {
+          background: #fff;
+          color: #111;
+          font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+          font-size: 14px;
+        }
 
-        <li>
-          <a
-            onClick={handleLinkClick}
-            target="_blank"
-            rel="noreferrer"
-            href="https://github.com/saleor/saleor-app-sdk"
-          >
-            <Text color={"info1"}>Saleor App SDK</Text>
-          </a>
-        </li>
+        .app {
+          max-width: 760px;
+          margin: 0 auto;
+          padding: 40px 20px 60px;
+        }
 
-        <li>
-          <a
-            onClick={handleLinkClick}
-            target="_blank"
-            href="https://github.com/saleor/saleor-cli"
-            rel="noreferrer"
-          >
-            <Text color={"info1"}>Saleor CLI</Text>
-          </a>
-        </li>
-        <li>
-          <a
-            onClick={handleLinkClick}
-            target="_blank"
-            href="https://github.com/saleor/apps"
-            rel="noreferrer"
-          >
-            <Text color={"info1"}>Saleor App Store - official apps by Saleor Team</Text>
-          </a>
-        </li>
-        <li>
-          <a
-            onClick={handleLinkClick}
-            target="_blank"
-            href="https://macaw-ui-next.vercel.app/?path=/docs/getting-started-installation--docs"
-            rel="noreferrer"
-          >
-            <Text color={"info1"}>Macaw UI - official Saleor UI library</Text>
-          </a>
-        </li>
-        <li>
-          <a
-            onClick={handleLinkClick}
-            target="_blank"
-            href="https://nextjs.org/docs"
-            rel="noreferrer"
-          >
-            <Text color={"info1"}>Next.js documentation</Text>
-          </a>
-        </li>
-      </ul>
+        .header {
+          margin-bottom: 36px;
+          padding-bottom: 24px;
+          border-bottom: 1px solid #e5e5e5;
+        }
 
-      {mounted && !isLocalHost && !appBridgeState?.ready && (
-        <>
-          <Text marginBottom={4} as={"p"}>
-            Install this app in your Dashboard and get extra powers!
-          </Text>
-          <AddToSaleorForm />
-        </>
-      )}
-    </Box>
+        .header h1 {
+          font-size: 22px;
+          font-weight: 700;
+          color: #111;
+          letter-spacing: -0.02em;
+        }
+
+        .header p {
+          margin-top: 4px;
+          font-size: 13px;
+          color: #888;
+        }
+
+        .grid {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 16px;
+        }
+
+        @media (max-width: 600px) {
+          .app { padding: 24px 16px 40px; }
+          .header { margin-bottom: 24px; padding-bottom: 20px; }
+          .header h1 { font-size: 18px; }
+          .header p { font-size: 12px; }
+          .grid { grid-template-columns: 1fr; gap: 12px; }
+          .card { padding: 16px; }
+          .input-field { font-size: 16px; }
+          .result-row { flex-wrap: wrap; gap: 4px; }
+          .result-value { text-align: left; }
+          .tags { justify-content: flex-start; }
+        }
+
+        .card {
+          border: 1px solid #e5e5e5;
+          border-radius: 10px;
+          padding: 20px;
+        }
+
+        .card h2 {
+          font-size: 14px;
+          font-weight: 600;
+          color: #111;
+          margin-bottom: 2px;
+        }
+
+        .card-desc {
+          font-size: 12px;
+          color: #999;
+          margin-bottom: 14px;
+        }
+
+        .input-row {
+          display: flex;
+          gap: 8px;
+        }
+
+        .input-field {
+          flex: 1;
+          min-width: 0;
+          border: 1px solid #ddd;
+          border-radius: 6px;
+          padding: 8px 11px;
+          font-size: 13px;
+          color: #111;
+          outline: none;
+          background: #fff;
+          transition: border-color 0.15s;
+        }
+
+        .input-field::placeholder { color: #bbb; }
+        .input-field:focus { border-color: #111; }
+
+        .btn {
+          background: #111;
+          color: #fff;
+          border: none;
+          border-radius: 6px;
+          padding: 8px 14px;
+          font-size: 13px;
+          font-weight: 600;
+          cursor: pointer;
+          white-space: nowrap;
+          transition: background 0.15s;
+          min-width: 52px;
+          text-align: center;
+        }
+
+        .btn:hover:not(:disabled) { background: #333; }
+        .btn:disabled { background: #ccc; cursor: not-allowed; }
+
+        .spinner {
+          display: inline-block;
+          width: 11px;
+          height: 11px;
+          border: 2px solid rgba(255,255,255,0.3);
+          border-top-color: #fff;
+          border-radius: 50%;
+          animation: spin 0.7s linear infinite;
+          vertical-align: middle;
+        }
+
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        .result-box {
+          margin-top: 14px;
+          border: 1px solid #e5e5e5;
+          border-radius: 8px;
+          overflow: hidden;
+          animation: fadeIn 0.2s ease;
+        }
+
+        @keyframes fadeIn {
+          from { opacity: 0; transform: translateY(4px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+
+        .result-row {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          padding: 9px 14px;
+          border-bottom: 1px solid #f0f0f0;
+          gap: 12px;
+        }
+
+        .result-row:last-child { border-bottom: none; }
+
+        .result-label {
+          font-size: 11px;
+          color: #999;
+          text-transform: uppercase;
+          letter-spacing: 0.06em;
+          white-space: nowrap;
+        }
+
+        .result-value {
+          font-size: 13px;
+          color: #111;
+          font-weight: 500;
+          text-align: right;
+          word-break: break-word;
+        }
+
+        .result-value.mono {
+          font-family: 'SF Mono', 'Fira Code', monospace;
+          font-size: 12px;
+        }
+
+        .badge {
+          display: inline-block;
+          padding: 2px 8px;
+          border-radius: 4px;
+          font-size: 11px;
+          font-weight: 600;
+          letter-spacing: 0.04em;
+        }
+
+        .badge-ok {
+          background: #f0f0f0;
+          color: #111;
+          border: 1px solid #ddd;
+        }
+
+        .badge-err {
+          background: #fff0f0;
+          color: #c00;
+          border: 1px solid #fcc;
+        }
+
+        .tags {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 4px;
+          justify-content: flex-end;
+        }
+
+        .tag {
+          font-size: 10px;
+          padding: 2px 7px;
+          border-radius: 4px;
+          border: 1px solid #ddd;
+          color: #555;
+          background: #fafafa;
+        }
+
+        .msg-error {
+          margin-top: 10px;
+          padding: 9px 12px;
+          border: 1px solid #fcc;
+          border-radius: 6px;
+          font-size: 12px;
+          color: #c00;
+          background: #fff8f8;
+        }
+
+        .msg-warn {
+          margin-top: 10px;
+          padding: 9px 12px;
+          border: 1px solid #e5e5e5;
+          border-radius: 6px;
+          font-size: 12px;
+          color: #666;
+          background: #fafafa;
+        }
+        @media (max-width: 600px) {
+          .app { padding: 24px 16px 40px; }
+          .header { margin-bottom: 24px; padding-bottom: 20px; }
+          .header h1 { font-size: 18px; }
+          .header p { font-size: 12px; }
+          .grid { grid-template-columns: 1fr; gap: 12px; }
+          .card { padding: 16px; }
+          .input-field { font-size: 16px; }
+          .result-row { flex-wrap: wrap; gap: 4px; }
+          .result-value { text-align: left; }
+          .tags { justify-content: flex-start; }
+        }
+        @media (max-width: 600px) {
+          .app { padding: 24px 16px 40px; }
+          .header { margin-bottom: 24px; padding-bottom: 20px; }
+          .header h1 { font-size: 18px; }
+          .header p { font-size: 12px; }
+          .grid { grid-template-columns: 1fr; gap: 12px; }
+          .card { padding: 16px; }
+          .input-field { font-size: 16px; }
+          .result-row { flex-wrap: wrap; gap: 4px; }
+          .result-value { text-align: left; }
+          .tags { justify-content: flex-start; }
+        }
+      `}</style>
+
+      <div className="app">
+        <div className="header">
+          <h1>Delhivery Shipping</h1>
+          <p>Track shipments · Check pincode serviceability</p>
+        </div>
+
+        <div className="grid">
+          {/* Track */}
+          <div className="card">
+            <h2>Track Shipment</h2>
+            <p className="card-desc">Enter AWB / waybill number</p>
+            <div className="input-row">
+              <input
+                className="input-field"
+                value={waybill}
+                onChange={(e) => setWaybill(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && trackShipment()}
+                placeholder="e.g. 1234567890"
+              />
+              <button className="btn" onClick={trackShipment} disabled={loadingTrack || !waybill.trim()}>
+                {loadingTrack ? <span className="spinner" /> : "Track"}
+              </button>
+            </div>
+
+            {trackError && <div className="msg-error">⚠ {trackError}</div>}
+
+            {tracking && (
+              <div className="result-box">
+                <div className="result-row">
+                  <span className="result-label">AWB</span>
+                  <span className="result-value mono">{tracking.awb}</span>
+                </div>
+                <div className="result-row">
+                  <span className="result-label">Status</span>
+                  <span className="badge badge-ok">{tracking.status}</span>
+                </div>
+                <div className="result-row">
+                  <span className="result-label">Location</span>
+                  <span className="result-value">{tracking.location}</span>
+                </div>
+                <div className="result-row">
+                  <span className="result-label">Updated</span>
+                  <span className="result-value mono">{tracking.statusTime}</span>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Pincode */}
+          <div className="card">
+            <h2>Pincode Check</h2>
+            <p className="card-desc">Verify delivery coverage</p>
+            <div className="input-row">
+              <input
+                className="input-field"
+                value={pincode}
+                onChange={(e) => setPincode(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                onKeyDown={(e) => e.key === "Enter" && checkServiceability()}
+                placeholder="6-digit pincode"
+                maxLength={6}
+              />
+              <button className="btn" onClick={checkServiceability} disabled={loadingPin || pincode.length !== 6}>
+                {loadingPin ? <span className="spinner" /> : "Check"}
+              </button>
+            </div>
+
+            {serviceability && !serviceability.success && (
+              <div className="msg-warn">Not serviceable by Delhivery.</div>
+            )}
+
+            {serviceability?.success && serviceability.data[0] && (() => {
+              const d = serviceability.data[0];
+              const payments = parsePaymentTypes(d.payment_type);
+              return (
+                <div className="result-box">
+                  <div className="result-row">
+                    <span className="result-label">Status</span>
+                    <span className="badge badge-ok">Serviceable</span>
+                  </div>
+                  <div className="result-row">
+                    <span className="result-label">City</span>
+                    <span className="result-value">{d.city}, {d.state}</span>
+                  </div>
+                  <div className="result-row">
+                    <span className="result-label">Hub</span>
+                    <span className="result-value" style={{ fontSize: "11px" }}>{d.center}</span>
+                  </div>
+                  <div className="result-row">
+                    <span className="result-label">First Mile</span>
+                    <span className={`badge ${d.fm_serviceable ? "badge-ok" : "badge-err"}`}>
+                      {d.fm_serviceable ? "Yes" : "No"}
+                    </span>
+                  </div>
+                  {payments.length > 0 && (
+                    <div className="result-row">
+                      <span className="result-label">Payment</span>
+                      <div className="tags">
+                        {payments.map((p) => <span key={p} className="tag">{p}</span>)}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
+          </div>
+        </div>
+      </div>
+    </>
   );
-};
-
-export default IndexPage;
+}
