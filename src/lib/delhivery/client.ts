@@ -79,13 +79,37 @@ async checkPincode(pin: string) {
   console.log("Response data:", JSON.stringify(res.data, null, 2));
   return res.data;
 }
-  async fetchWaybill(count: number = 1): Promise<string[]> {
-    const res = await axios.get(
-      `${this.baseUrl}/waybill/api/bulk/json/?count=${count}&cl=${this.clientName}`,
-      { headers: this.headers }
-    );
-    return res.data?.waybill_list || [];
+async fetchWaybill(count: number = 1): Promise<string[]> {
+  console.log("=== FETCH WAYBILL DEBUG ===");
+  
+  const res = await axios.get(
+    `${this.baseUrl}/waybill/api/bulk/json/`,
+    {
+      params: {
+        token: this.token,
+        count,
+      },
+      headers: {
+        Accept: "application/json",
+      },
+    }
+  );
+  
+  console.log("Waybill response:", JSON.stringify(res.data, null, 2));
+
+  // ✅ API returns a plain string e.g. "48372210000066"
+  // not { waybill_list: [...] }
+  if (typeof res.data === "string") {
+    return [res.data.trim()];
   }
+
+  // fallback for array or object response
+  if (Array.isArray(res.data)) {
+    return res.data;
+  }
+
+  return res.data?.waybill_list || [];
+}
 
   async createShipment(payload: DelhiveryShipmentPayload) {
     const formData = new URLSearchParams();

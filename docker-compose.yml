@@ -1,0 +1,37 @@
+version: "3.8"
+
+services:
+  app:
+    build: .
+    env_file:
+      - .env
+    restart: unless-stopped
+    networks:
+      - traefik-net
+    labels:
+      - "traefik.enable=true"
+
+      # HTTP → HTTPS redirect
+      - "traefik.http.routers.orders-app-http.rule=Host(`orders.app.thehouseofregent.com`)"
+      - "traefik.http.routers.orders-app-http.entrypoints=web"
+      - "traefik.http.routers.orders-app-http.middlewares=redirect-to-https"
+
+      # HTTPS
+      - "traefik.http.routers.orders-app.rule=Host(`orders.app.thehouseofregent.com`)"
+      - "traefik.http.routers.orders-app.entrypoints=websecure"
+      - "traefik.http.routers.orders-app.tls=true"
+      - "traefik.http.routers.orders-app.tls.certresolver=letsencrypt"
+
+      # Service port
+      - "traefik.http.services.orders-app.loadbalancer.server.port=3000"
+
+      # Middleware
+      - "traefik.http.middlewares.redirect-to-https.redirectscheme.scheme=https"
+      - "traefik.http.middlewares.redirect-to-https.redirectscheme.permanent=true"
+
+      # Network
+      - "traefik.docker.network=traefik-net"
+
+networks:
+  traefik-net:
+    external: true

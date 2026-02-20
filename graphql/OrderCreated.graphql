@@ -1,15 +1,3 @@
-fragment Address on Address {
-  firstName
-  lastName
-  streetAddress1
-  streetAddress2
-  city
-  countryArea
-  postalCode
-  phone
-  country { country code }
-}
-
 subscription OrderCreated {
   event {
     ... on OrderCreated {
@@ -19,14 +7,35 @@ subscription OrderCreated {
         created
         status
         paymentStatus
-        shippingAddress { ...Address }
-        total { gross { amount currency } }
+        shippingAddress {
+          firstName
+          lastName
+          streetAddress1
+          streetAddress2
+          city
+          countryArea
+          postalCode
+          phone
+          country {
+            country
+            code
+          }
+        }
+        total {
+          gross {
+            amount
+            currency
+          }
+        }
         lines {
           productName
           quantity
           variant {
-            weight { value unit }
             sku
+            weight {
+              value
+              unit
+            }
           }
         }
       }
